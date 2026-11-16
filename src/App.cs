@@ -14,6 +14,7 @@ public sealed class CounterSnapshot {
  public List<Entry> Events=new List<Entry>();public string Warning="";public bool Running=true;
 }
 public sealed class LiteWindow : Form {
+ protected override bool ShowWithoutActivation {get{return true;}}
  readonly Engine engine;readonly Label chat=new Label(),count=new Label();readonly ToolTip tooltip=new ToolTip();
  readonly ManualResetEvent stop=new ManualResetEvent(false);readonly AutoResetEvent refresh=new AutoResetEvent(false);
  readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();

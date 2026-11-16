@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 
 namespace CompactCounter {
 // One lightweight process, no service, hooks, injected code or polling UIA while
@@ -15,6 +16,7 @@ public sealed class LifecycleDecision {
  public void UserClosed(){Suppressed=true;}
 }
 public sealed class Lifecycle : ApplicationContext {
+ [DllImport("user32.dll")]static extern bool ShowWindowAsync(IntPtr window,int command);
  readonly string root,state;readonly Timer timer=new Timer();readonly LifecycleDecision decision=new LifecycleDecision();
  LiteWindow window;Engine engine;bool automaticClose;bool exiting;
  public Lifecycle(string logRoot,string statePath){root=logRoot;state=statePath;timer.Interval=1000;timer.Tick+=(s,e)=>Tick();timer.Start();Tick();}
@@ -22,7 +24,11 @@ public sealed class Lifecycle : ApplicationContext {
   if(exiting)return;bool codexOpen=ActiveChat.FindWindows().Count>0;
   if(!codexOpen&&window!=null&&!window.IsDisposed){automaticClose=true;window.Close();window=null;automaticClose=false;}
   if(decision.ShouldShow(codexOpen,window!=null&&!window.IsDisposed)){
-   try {if(engine==null)engine=new Engine(root,state);window=new LiteWindow(engine);window.FormClosed+=(s,e)=>{if(!automaticClose)decision.UserClosed();window=null;};window.Show();}
+   try {if(engine==null)engine=new Engine(root,state);window=new LiteWindow(engine);window.FormClosed+=(s,e)=>{if(!automaticClose)decision.UserClosed();window=null;};window.Show();
+    // STARTUPINFO can override the first Show with SW_HIDE/SW_MINIMIZE.
+    // Explicitly show the counter after that first call, without taking focus.
+    ShowWindowAsync(window.Handle,4);
+   }
    catch(Exception e){decision.UserClosed();MessageBox.Show("计数器无法启动："+e.Message,"压缩计数器");}
   }
  }

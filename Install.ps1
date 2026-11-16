@@ -19,10 +19,10 @@ $startupShortcut = $shell.CreateShortcut($startupPath)
 $startupShortcut.TargetPath = $targetExe
 $startupShortcut.Arguments = '--watch'
 $startupShortcut.WorkingDirectory = $destination
-$startupShortcut.WindowStyle = 7
+$startupShortcut.WindowStyle = 1
 $startupShortcut.Description = 'Show the compaction counter while Codex is open.'
 $startupShortcut.Save()
 # ShellExecute starts the installed user application; no terminal stays open.
-Start-Process -FilePath $targetExe -ArgumentList '--watch' -WindowStyle Hidden
+Start-Process -FilePath $targetExe -ArgumentList '--watch' -WindowStyle Normal
 Write-Host ('已安装到：' + $destination)
 Write-Host '已启用随登录启动。打开 Codex 时显示小窗，关闭 Codex 时小窗自动关闭。'
