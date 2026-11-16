@@ -19,9 +19,13 @@ public sealed class LiteWindow : Form {
  readonly ManualResetEvent stop=new ManualResetEvent(false);readonly AutoResetEvent refresh=new AutoResetEvent(false);
  readonly System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer();
  volatile ActiveResult active=new ActiveResult();volatile CounterSnapshot snapshot=new CounterSnapshot();
- volatile Dictionary<string,string> names=new Dictionary<string,string>();HistoryWindow history;bool placed;string rendered="";
+ volatile Dictionary<string,string> names=new Dictionary<string,string>();HistoryWindow history;string rendered="";
+ readonly System.Windows.Forms.Timer followTimer=new System.Windows.Forms.Timer();
+ readonly string placementPath;DockPlacement placement;bool dragging;IntPtr dragOwner,lastOwner;
+ Rectangle lastOwnerBounds;Size lastSize;
  public LiteWindow(Engine e){
-  engine=e;Text="压缩计数 · 自动";ClientSize=new Size(224,69);FormBorderStyle=FormBorderStyle.FixedSingle;
+  engine=e;placementPath=Path.Combine(Path.GetDirectoryName(e.StatePath),"window.json");placement=DockPlacement.Load(placementPath);
+  Text="压缩计数 · 自动";ClientSize=new Size(224,69);FormBorderStyle=FormBorderStyle.FixedSingle;
   TopMost=true;MaximizeBox=false;MinimizeBox=false;ShowInTaskbar=true;StartPosition=FormStartPosition.Manual;
   BackColor=Color.FromArgb(248,250,249);Font=new Font("Microsoft YaHei UI",9);AutoScaleMode=AutoScaleMode.Dpi;
   chat.SetBounds(12,8,200,22);chat.AutoEllipsis=true;chat.Text="正在识别当前聊天…";
@@ -30,8 +34,11 @@ public sealed class LiteWindow : Form {
   chat.DoubleClick+=(s,a)=>ShowHistory();count.DoubleClick+=(s,a)=>ShowHistory();
   var area=Screen.PrimaryScreen.WorkingArea;Location=new Point(area.Right-Width-16,area.Top+80);
   timer.Interval=150;timer.Tick+=(s,a)=>Render();
-  Shown+=(s,a)=>{timer.Start();var watch=new Thread(WatchChat){IsBackground=true,Name="Current sidebar item"};watch.SetApartmentState(ApartmentState.MTA);watch.Start();new Thread(WatchLogs){IsBackground=true,Name="Read-only compaction index"}.Start();};
-  FormClosed+=(s,a)=>{timer.Stop();stop.Set();refresh.Set();if(history!=null)history.Dispose();tooltip.Dispose();};
+  followTimer.Interval=50;followTimer.Tick+=(s,a)=>Follow(false);
+  ResizeBegin+=(s,a)=>{dragging=true;dragOwner=active.Window;};
+  ResizeEnd+=(s,a)=>{Rectangle owner;if(OwnerBounds(dragOwner,out owner)){placement=DockPlacement.Capture(owner,Bounds,24);SavePlacement();}dragging=false;Follow(true);};
+  Shown+=(s,a)=>{timer.Start();followTimer.Start();var watch=new Thread(WatchChat){IsBackground=true,Name="Current sidebar item"};watch.SetApartmentState(ApartmentState.MTA);watch.Start();new Thread(WatchLogs){IsBackground=true,Name="Read-only compaction index"}.Start();};
+  FormClosed+=(s,a)=>{timer.Stop();followTimer.Stop();followTimer.Dispose();stop.Set();refresh.Set();if(history!=null)history.Dispose();tooltip.Dispose();};
  }
  void WatchChat(){
   try{var index=new TitleIndex(Path.Combine(Directory.GetParent(engine.Data.Root).FullName,"session_index.jsonl"));using(var reader=new ActiveChat(index)){
@@ -64,10 +71,18 @@ public sealed class LiteWindow : Form {
   else if(a.Id!="")value="暂无可读日志";
   string key=title+"|"+value+"|"+s.Warning;
   if(key!=rendered){chat.Text=title;count.Text=value;var old=count.Font;count.Font=new Font(Font.FontFamily,value.Length>8?11:16,FontStyle.Bold);old.Dispose();tooltip.SetToolTip(chat,a.Id);tooltip.SetToolTip(count,s.Warning!=""?s.Warning:"自动跟随当前聊天 · 右键查看历史");rendered=key;}
-  if(!placed&&a.Window!=IntPtr.Zero){Place();placed=true;}
   if(history!=null&&!history.IsDisposed&&history.Visible)history.RefreshData(s,names,a.Id);
  }
- void Place(){var h=active.Window;ActiveChat.Rect r;if(h!=IntPtr.Zero&&ActiveChat.GetWindowRect(h,out r)){var area=Screen.FromHandle(h).WorkingArea;Location=new Point(Math.Max(area.Left,Math.Min(r.Right+8,area.Right-Width)),Math.Max(area.Top,Math.Min(r.Top+72,area.Bottom-Height)));}}
+ static bool OwnerBounds(IntPtr h,out Rectangle bounds){ActiveChat.Rect r;bounds=Rectangle.Empty;if(h==IntPtr.Zero||!ActiveChat.GetWindowRect(h,out r)||r.Right<=r.Left||r.Bottom<=r.Top||r.Left<=-30000||r.Top<=-30000)return false;bounds=Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom);return true;}
+ void SavePlacement(){try{placement.Save(placementPath);}catch{tooltip.SetToolTip(chat,"位置暂未保存；请检查计数器状态目录权限。");}}
+ void Follow(bool force){
+  if(dragging)return;var h=active.Window;Rectangle owner;if(!OwnerBounds(h,out owner))return;
+  if(!force&&h==lastOwner&&owner==lastOwnerBounds&&Size==lastSize)return;
+  var area=Screen.FromHandle(h).WorkingArea;if(placement==null)placement=DockPlacement.Default(owner,Size,area);
+  var point=placement.Position(owner,Size,area);if(Location!=point)Location=point;
+  lastOwner=h;lastOwnerBounds=owner;lastSize=Size;
+ }
+ void Place(){Rectangle owner;if(OwnerBounds(active.Window,out owner)){placement=DockPlacement.Default(owner,Size,Screen.FromHandle(active.Window).WorkingArea);SavePlacement();Follow(true);}}
  void ShowHistory(){if(history==null||history.IsDisposed)history=new HistoryWindow();history.RefreshData(snapshot,names,active.Id);history.Show();history.Activate();}
 }
 public sealed class HistoryWindow : Form {

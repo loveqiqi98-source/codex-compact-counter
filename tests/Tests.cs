@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Drawing;
 using CompactCounter;
 class Tests {
  static string a="11111111-1111-4111-8111-111111111111",b="22222222-2222-4222-8222-222222222222";
@@ -52,6 +53,17 @@ class Tests {
    Check(!life.ShouldShow(true,true),"existing counter never duplicated");
    life.UserClosed();Check(!life.ShouldShow(true,false),"manual hide respected until next Codex opening");
    Check(!life.ShouldShow(false,false)&&life.ShouldShow(true,false),"Codex close and reopen resets lifecycle");
+   var owner=new Rectangle(300,200,800,600);var size=new Size(230,98);var area=new Rectangle(-1920,0,5760,2160);
+   var dock=DockPlacement.Default(owner,size,area);var initial=dock.Position(owner,size,area);
+   Check(initial==new Point(1108,272),"default dock sits next to Codex");
+   Check(dock.Position(new Rectangle(340,225,800,600),size,area)==new Point(1148,297),"moving Codex preserves relative offset");
+   Check(dock.Position(new Rectangle(300,200,1000,600),size,area)==new Point(1308,272),"resizing Codex keeps right edge attachment");
+   dock=DockPlacement.Capture(owner,new Rectangle(1115,350,230,98),24);Check(dock.Position(owner,size,area)==new Point(1108,350),"drag release snaps to nearby right edge");
+   dock=DockPlacement.Capture(owner,new Rectangle(40,360,230,98),24);Check(dock.Position(owner,size,area)==new Point(62,360),"drag release snaps to left edge");
+   dock=DockPlacement.Capture(owner,new Rectangle(600,450,230,98),24);Check(dock.Position(new Rectangle(350,240,800,600),size,area)==new Point(650,490),"freely dragged position follows without jumping to default");
+   string dockPath=Path.Combine(home,"window.json");dock.Save(dockPath);var restored=DockPlacement.Load(dockPath);Check(restored.Position(owner,size,area)==new Point(600,450),"dragged position survives restart");
+   dock=new DockPlacement();var preferred=dock.Position(owner,size,area);dock.Position(owner,size,new Rectangle(0,0,1000,700));Check(dock.Position(owner,size,area)==preferred,"screen clamping does not overwrite preferred attachment");
+   Check(dock.Position(new Rectangle(-1600,100,800,600),size,area)==new Point(-792,172),"negative monitor coordinates remain valid");
    Console.WriteLine("ALL "+checks+" CHECKS PASSED");return 0;
   }catch(Exception ex){Console.WriteLine(ex.ToString());return 1;}
  }
