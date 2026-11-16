@@ -36,7 +36,7 @@ public sealed class LiteWindow : SurfaceWindow {
   var bottom=new Grid();bottom.ColumnDefinitions.Add(new ColumnDefinition());bottom.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});Grid.SetRow(bottom,2);ContentGrid.Children.Add(bottom);
   var number=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};count.FontFamily=new FontFamily("Segoe UI");count.FontWeight=FontWeights.Light;unit.Margin=new Thickness(5,17,0,0);unit.Visibility=Visibility.Collapsed;number.Children.Add(count);number.Children.Add(unit);bottom.Children.Add(number);
   badge.CornerRadius=new CornerRadius(12);badge.Padding=new Thickness(10,5,10,5);badge.Margin=new Thickness(0,13,5,0);badge.VerticalAlignment=VerticalAlignment.Center;badge.Background=Ui.Hover;badge.Child=status;Grid.SetColumn(badge,1);bottom.Children.Add(badge);
-  Surface.MouseLeftButtonDown+=(s,a)=>{if(a.ClickCount==2){ShowHistory();a.Handled=true;return;}if(a.ButtonState==MouseButtonState.Pressed){try{DragMove();}catch(InvalidOperationException){}}};
+  Surface.MouseLeftButtonDown+=(s,a)=>{if(menu!=null&&!menu.IsDisposed){menu.Close();a.Handled=true;return;}if(a.ClickCount==2){ShowHistory();a.Handled=true;return;}if(a.ButtonState==MouseButtonState.Pressed){try{DragMove();}catch(InvalidOperationException){}}};
   Surface.MouseRightButtonUp+=(s,a)=>{ShowMenu();a.Handled=true;};
   SourceInitialized+=(s,a)=>{
    HwndSource.FromHwnd(Handle).AddHook(WindowMessage);
@@ -67,13 +67,32 @@ public sealed class LiteWindow : SurfaceWindow {
   lastOwner=h;lastOwnerBounds=owner;lastSize=box.Size;
  }
  void Place(){Drawing.Rectangle owner,box;if(NativeWindow.Bounds(active.Window,out owner)&&NativeWindow.Bounds(Handle,out box)){placement=DockPlacement.Default(owner,box.Size,NativeWindow.WorkArea(active.Window));SavePlacement();Follow(true);}}
- void ShowMenu(){if(menu!=null&&!menu.IsDisposed){menu.Close();return;}menu=new MenuWindow(this,ShowHistory,Place,Close,()=>System.Windows.Forms.Application.Exit());menu.Left=Left+Width-menu.Width-8;menu.Top=Top+40;menu.Show();}
+ protected override bool HandleSurfaceKey(KeyEventArgs e){if(menu!=null&&!menu.IsDisposed&&menu.HandleMenuKey(e.Key,Keyboard.Modifiers))return true;return base.HandleSurfaceKey(e);}
+ void ShowMenu(){if(menu!=null&&!menu.IsDisposed){menu.Close();return;}Activate();menu=new MenuWindow(this,ShowHistory,Place,Close,()=>System.Windows.Forms.Application.Exit());menu.Left=Left+Width-menu.Width-8;menu.Top=Top+40;menu.Show();}
  void ShowHistory(){if(history==null||history.IsDisposed){history=new HistoryWindow();history.Owner=this;}history.RefreshData(snapshot,names,active.Id);history.Show();history.Activate();}
  public void SetPreview(string title,int value){active=new ActiveResult{Id="preview",Title=title};var data=new CounterSnapshot();data.Counts["preview"]=value;data.Complete.Add("preview");snapshot=data;Render();}
 }
 public sealed class MenuWindow : SurfaceWindow {
- public MenuWindow(Window owner,Action history,Action place,Action hide,Action exit):base(224,218){Title="计数器菜单";Owner=owner;ShowActivated=true;Surface.CornerRadius=new CornerRadius(13);var stack=new StackPanel{Margin=new Thickness(8)};ContentGrid.Children.Add(stack);var label=Ui.Label("计数器",10,Ui.Muted);label.Margin=new Thickness(10,3,0,7);stack.Children.Add(label);Add(stack,"全部会话与历史",history);Add(stack,"重新吸附到 Codex",place);Add(stack,"本次隐藏",hide);stack.Children.Add(Ui.Divider());Add(stack,"退出计数器",exit);Deactivated+=(s,a)=>{if(!IsDisposed&&!IsClosing)Close();};}
- void Add(Panel stack,string text,Action action){var b=Ui.Button(text,()=>{Close();action();});b.Height=32;b.HorizontalContentAlignment=HorizontalAlignment.Left;b.Padding=new Thickness(10,4,10,4);stack.Children.Add(b);}
+ readonly List<Button> items=new List<Button>();int selected=-1;
+ public MenuWindow(Window owner,Action history,Action place,Action hide,Action exit):base(224,218){
+  Title="计数器菜单";Owner=owner;ShowActivated=false;Surface.CornerRadius=new CornerRadius(13);
+  var stack=new StackPanel{Margin=new Thickness(8)};ContentGrid.Children.Add(stack);var label=Ui.Label("计数器",10,Ui.Muted);label.Margin=new Thickness(10,3,0,7);stack.Children.Add(label);Add(stack,"全部会话与历史",history);Add(stack,"重新吸附到 Codex",place);Add(stack,"本次隐藏",hide);stack.Children.Add(Ui.Divider());Add(stack,"退出计数器",exit);
+  SourceInitialized+=(s,a)=>{NativeWindow.NoActivate(Handle);HwndSource.FromHwnd(Handle).AddHook(MouseActivation);};
+  // Keep focus on the card. Destroying an active cross-process owned popup
+  // during WM_ACTIVATE can send the Codex group behind the previous app.
+  EventHandler leave=(s,a)=>Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(()=>{if(!owner.IsActive&&!IsDisposed&&!IsClosing)Close();}));
+  EventHandler moved=(s,a)=>{if(!IsDisposed&&!IsClosing)Close();};
+  owner.Deactivated+=leave;owner.LocationChanged+=moved;
+  Closed+=(s,a)=>{owner.Deactivated-=leave;owner.LocationChanged-=moved;};
+ }
+ IntPtr MouseActivation(IntPtr h,int message,IntPtr w,IntPtr l,ref bool handled){if(message==0x21){handled=true;return new IntPtr(3);}return IntPtr.Zero;}
+ public bool HandleMenuKey(Key key,ModifierKeys modifiers){
+  if(key==Key.Escape){Close();return true;}
+  if(key==Key.Down||key==Key.Up||key==Key.Tab){int step=key==Key.Up||key==Key.Tab&&(modifiers&ModifierKeys.Shift)!=0?-1:1;selected=selected<0?(step>0?0:items.Count-1):(selected+step+items.Count)%items.Count;for(int i=0;i<items.Count;i++)items[i].Background=i==selected?Ui.Hover:Brushes.Transparent;return true;}
+  if(key==Key.Enter||key==Key.Space){if(selected<0)selected=0;items[selected].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));return true;}return false;
+ }
+ protected override bool HandleSurfaceKey(KeyEventArgs e){return HandleMenuKey(e.Key,Keyboard.Modifiers);}
+ void Add(Panel stack,string text,Action action){var b=Ui.Button(text,()=>{Close();action();});b.Height=32;b.HorizontalContentAlignment=HorizontalAlignment.Left;b.Padding=new Thickness(10,4,10,4);b.Focusable=false;items.Add(b);stack.Children.Add(b);}
 }
 public sealed class HistoryWindow : SurfaceWindow {
  readonly ListBox sessions=new ListBox(),events=new ListBox();readonly TextBox search=new TextBox();readonly TextBlock heading=Ui.Label("全部事件",17,Ui.Text),summary=Ui.Label("",11,Ui.Muted),status=Ui.Label("只读本地记录",11,Ui.Muted),empty=Ui.Label("暂无记录",13,Ui.Muted);

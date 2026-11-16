@@ -21,6 +21,9 @@ public static class NativeWindow {
  [DllImport("user32.dll",CharSet=CharSet.Auto)]static extern bool GetMonitorInfo(IntPtr h,ref MonitorInfo info);
  [DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();
  [DllImport("user32.dll")]public static extern bool SetWindowPos(IntPtr h,IntPtr after,int x,int y,int width,int height,uint flags);
+ [DllImport("user32.dll",EntryPoint="GetWindowLongW")]static extern int GetWindowLong(IntPtr h,int index);
+ [DllImport("user32.dll",EntryPoint="SetWindowLongW")]static extern int SetWindowLong(IntPtr h,int index,int value);
+ public static void NoActivate(IntPtr h){SetWindowLong(h,-20,GetWindowLong(h,-20)|0x08000000);}
  public static bool Bounds(IntPtr h,out Rectangle r){ActiveChat.Rect b;r=Rectangle.Empty;if(h==IntPtr.Zero||!ActiveChat.GetWindowRect(h,out b)||b.Left<=-30000||b.Top<=-30000||b.Right<=b.Left||b.Bottom<=b.Top)return false;r=Rectangle.FromLTRB(b.Left,b.Top,b.Right,b.Bottom);return true;}
  public static Rectangle WorkArea(IntPtr h){var m=new MonitorInfo{Size=Marshal.SizeOf(typeof(MonitorInfo))};if(GetMonitorInfo(MonitorFromWindow(h,2),ref m))return Rectangle.FromLTRB(m.Work.Left,m.Work.Top,m.Work.Right,m.Work.Bottom);return new Rectangle(0,0,(int)SystemParameters.PrimaryScreenWidth,(int)SystemParameters.PrimaryScreenHeight);}
  public static void Attach(Window window,IntPtr owner){if(owner==IntPtr.Zero)return;var helper=new WindowInteropHelper(window);helper.Owner=owner;SetWindowPos(helper.Handle,new IntPtr(-2),0,0,0,0,0x13);}
@@ -54,8 +57,9 @@ public class SurfaceWindow : Window {
   FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI");FontSize=13;Foreground=Ui.Text;Ui.Theme(this);UseLayoutRounding=true;
   Surface=new Border{Background=Ui.Surface,BorderBrush=Ui.Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(16),Margin=new Thickness(8),Effect=new DropShadowEffect{Color=Colors.Black,BlurRadius=14,Opacity=.13,ShadowDepth=3}};
   Surface.Child=ContentGrid;Content=Surface;Closed+=(s,e)=>{IsDisposed=true;if(FormClosed!=null)FormClosed(this,EventArgs.Empty);};
-  PreviewKeyDown+=(s,e)=>{if(e.Key==Key.Escape){Close();e.Handled=true;}};
+  PreviewKeyDown+=(s,e)=>{if(!e.Handled&&HandleSurfaceKey(e))e.Handled=true;};
  }
+ protected virtual bool HandleSurfaceKey(KeyEventArgs e){if(e.Key!=Key.Escape)return false;Close();return true;}
  protected override void OnClosing(System.ComponentModel.CancelEventArgs e){IsClosing=true;base.OnClosing(e);if(e.Cancel)IsClosing=false;}
  protected void DragHeader(System.Windows.UIElement header){header.MouseLeftButtonDown+=(s,e)=>{if(e.ButtonState==MouseButtonState.Pressed){try{DragMove();}catch(InvalidOperationException){}}};}
  public Grid Header(string title,Action close){var g=new Grid{Margin=new Thickness(22,16,18,10)};g.ColumnDefinitions.Add(new ColumnDefinition());g.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});var t=Ui.Label(title,17,Ui.Text);t.FontWeight=FontWeights.SemiBold;g.Children.Add(t);DragHeader(t);var b=Ui.Button("×",close);b.Width=30;b.Height=30;b.Padding=new Thickness(0);b.FontSize=19;System.Windows.Automation.AutomationProperties.SetName(b,"关闭");Grid.SetColumn(b,1);g.Children.Add(b);return g;}
