@@ -1,0 +1,5 @@
+data/
+*.tmp
+*.bak
+active-diagnostic.txt
+render-diagnostic.txt
