@@ -23,7 +23,7 @@ jobs:
       - name: Package
         shell: powershell
         run: |
-          $files = @('CodexCompactCounter.exe','Install.cmd','Install.ps1','Uninstall.ps1','Uninstall.cmd','Start.cmd','README.md','LICENSE')
+          $files = @('CodexCompactCounter.exe','Install.cmd','Install.ps1','Uninstall.ps1','Uninstall.cmd','Start.cmd','README.md','LICENSE','docs')
           Get-FileHash CodexCompactCounter.exe -Algorithm SHA256 | ForEach-Object { $_.Hash.ToLowerInvariant() + '  CodexCompactCounter.exe' } | Set-Content SHA256.txt
           Compress-Archive -LiteralPath ($files + 'SHA256.txt') -DestinationPath CodexCompactCounter-Windows.zip
       - uses: actions/upload-artifact@v4

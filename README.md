@@ -7,12 +7,26 @@ Windows 上一个小小的本地悬浮窗，自动跟随 Codex 当前聊天：
 
 在 Codex 左侧切换聊天，小窗会自动跟随，不用绑定。约每 450 毫秒检查当前聊天，已索引的次数通常一秒内显示。第一次读取某个尚未索引的日志时，会先显示“统计中”。
 
-- 小窗吸附在 Codex 旁边，移动或缩放 Codex 时自动跟随。拖动标题栏可以自由换位置，靠近边缘松手会吸附；位置在重启后保留。
-- 右键 → **全部会话与历史**，查看详细记录和导出 CSV；也可双击小窗文字打开。
+- 卡片吸附在 Codex 旁边，移动或缩放时自动跟随。拖动卡片空白处可以换位置，靠近边缘松手会吸附；重启后保留位置。
+- 右上角 **···** 或右键 → **全部会话与历史**，查看详细记录和导出 CSV；也可双击小窗文字打开。
 - 右键 → **靠近 Codex**，重新摆放小窗。
 - Codex 打开时小窗自动出现；Codex 关闭或全部最小化时小窗收起，恢复窗口后重新出现。
 - 关闭详细面板，小窗继续运行。点击小窗 × 为本次隐藏，直到 Codex 关闭/重新打开；右键“退出自动计数器”可完全退出。
 - 无需 Python、Node 或管理员权限；支持 Windows 10/11 + .NET Framework 4.8。
+
+- 主卡片、菜单、历史、导出与提示窗使用统一矢量界面，圆角采用像素透明度混合，不做硬边裁切。启动时适配系统明暗主题。
+- 窗口归属 Codex，**不全局置顶**；切换到其他软件时留在 Codex 的窗口层级。文件保存位置由 Windows 标准文件选择器提供。
+
+![卡片示例](docs/card.png)
+
+<details><summary>查看菜单、历史与导出界面（示例数据）</summary>
+
+![菜单](docs/menu.png)
+![历史](docs/history.png)
+![导出](docs/export.png)
+![提示](docs/notice.png)
+
+</details>
 
 ## 自动识别方式
 
@@ -59,12 +73,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\test.ps1
 
 自定义日志目录旁需要有 `session_index.jsonl` 才能自动匹配标题。状态目录不能放入 Codex 配置或日志目录。`--scan-once` 可用于无界面的一次性索引检查，结果保存至状态目录的 `scan-result.txt`。
 
-源码在 `src`，MIT 许可。构建使用 Windows 自带 .NET Framework 编译器，不下载依赖。42 项模拟检查覆盖去重、重启、轮转、归档过滤、标题映射、窗口生命周期、磁吸位置及多屏边界。GitHub Actions 在 Windows 上构建、测试和打包；推送 `v*` 标签发布安装包。已在桌面包 26.1111.2228.0 / 核心 0.169.0-alpha.11.1 上验证自动识别与实际小窗显示，详见 `VERIFICATION.md`。
+源码在 `src`，MIT 许可。构建使用 Windows 自带 .NET Framework 编译器，不下载依赖。51 项检查覆盖去重、重启、轮转、归档过滤、标题映射、窗口生命周期、磁吸位置、多屏边界、平滑透明边缘、菜单关闭、历史筛选和窗口归属。GitHub Actions 在 Windows 上构建、测试和打包；推送 `v*` 标签发布安装包。已在桌面包 26.1111.2228.0 / 核心 0.169.0-alpha.11.1 上验证自动识别与实际小窗显示，详见 `VERIFICATION.md`。
 
 ## English quick start
 
 Download **CodexCompactCounter-Windows.zip** from [Releases](https://github.com/loveqiqi98-source/codex-compact-counter/releases/latest), extract it and double-click **Install.cmd**. Requires Windows 10/11 and .NET Framework 4.8. No admin rights or extra dependencies.
 
-The small counter follows the selected Codex sidebar chat and moves with the Codex window. Drag its title bar to reposition it; nearby edges snap on release and the placement is remembered. It appears while a Codex main window is visible, hides when Codex closes or is minimized, and starts automatically at Windows login. Right-click for history or exit. Double-click **Uninstall.cmd** in the installation directory to remove it; count history is preserved.
+The small counter follows the selected Codex sidebar chat and moves with the Codex window. Drag the card to reposition it; nearby edges snap on release and the placement is remembered. It appears while a Codex main window is visible, hides when Codex closes or is minimized, and starts automatically at Windows login. Right-click for history or exit. Double-click **Uninstall.cmd** in the installation directory to remove it; count history is preserved.
+
+All application panels share an alpha-composited vector design with smooth corners. The counter is owned by Codex and is not globally topmost. The save-location picker uses the standard Windows dialog.
 
 The application never connects to the network. It reads event metadata and the selected sidebar title; mixed JSONL bytes are traversed but message bodies are skipped without decoding or persistence. It does not modify or inject into Codex. Duplicate titles, unavailable sidebar selection, cloud-only chats and compressed-only archives show an unknown/unavailable state. Counts cover available plain-text logs, not events deleted before indexing.

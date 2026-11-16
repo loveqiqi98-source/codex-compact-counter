@@ -3,8 +3,10 @@ $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Path $TestDirectory -Force | Out-Null
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $exe = Join-Path $TestDirectory 'Tests.exe'
+$wpf = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF'
+$wpfRefs = @('PresentationCore.dll','PresentationFramework.dll','WindowsBase.dll') | ForEach-Object { '/r:' + (Join-Path $wpf $_) }
 $sourceFiles = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.cs' | ForEach-Object FullName
-& $compiler /nologo /optimize+ /codepage:65001 /main:Tests /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll ('/out:' + $exe) $sourceFiles (Join-Path $PSScriptRoot 'tests\Tests.cs')
+& $compiler /nologo /optimize+ /codepage:65001 /main:Tests /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll ('/out:' + $exe) $wpfRefs /r:System.Xaml.dll $sourceFiles (Join-Path $PSScriptRoot 'tests\Tests.cs')
 if ($LASTEXITCODE -ne 0) { throw '测试编译失败' }
 $start = New-Object System.Diagnostics.ProcessStartInfo
 $start.FileName = $exe

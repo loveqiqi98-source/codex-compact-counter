@@ -12,7 +12,7 @@ class Tests {
  static string Event(int sec,string kind="compacted"){return "{\"timestamp\":\"2026-11-16T00:00:"+sec.ToString("00")+"Z\",\"type\":\""+kind+"\",\"payload\":{\"message\":\"PRIVATE_BODY_SENTINEL\"}}\n";}
  static void Write(string p,string s){File.WriteAllText(p,s,new UTF8Encoding(false));}
  static void Append(string p,string s){File.AppendAllText(p,s,new UTF8Encoding(false));}
- static int Main(string[] args){
+ [STAThread]static int Main(string[] args){
   try {
    string home=Path.GetFullPath(args[0]);Directory.CreateDirectory(home);string logs=Path.Combine(home,"logs");Directory.CreateDirectory(logs);
    string state=Path.Combine(home,"data","state.json"),fa=Path.Combine(logs,"rollout-"+a+".jsonl"),fb=Path.Combine(logs,"rollout-"+b+".jsonl");
@@ -64,7 +64,26 @@ class Tests {
    string dockPath=Path.Combine(home,"window.json");dock.Save(dockPath);var restored=DockPlacement.Load(dockPath);Check(restored.Position(owner,size,area)==new Point(600,450),"dragged position survives restart");
    dock=new DockPlacement();var preferred=dock.Position(owner,size,area);dock.Position(owner,size,new Rectangle(0,0,1000,700));Check(dock.Position(owner,size,area)==preferred,"screen clamping does not overwrite preferred attachment");
    Check(dock.Position(new Rectangle(-1600,100,800,600),size,area)==new Point(-792,172),"negative monitor coordinates remain valid");
+   UiChecks.Run(home,Check);
    Console.WriteLine("ALL "+checks+" CHECKS PASSED");return 0;
   }catch(Exception ex){Console.WriteLine(ex.ToString());return 1;}
+ }
+}
+
+static class UiChecks {
+ [System.Runtime.InteropServices.DllImport("user32.dll",EntryPoint="GetWindowLongW")]static extern int GetWindowLong(IntPtr h,int index);
+ [System.Runtime.InteropServices.DllImport("user32.dll")]static extern IntPtr GetWindow(IntPtr h,uint command);
+ static System.Collections.Generic.IEnumerable<T> Children<T>(System.Windows.DependencyObject node)where T:System.Windows.DependencyObject{for(int i=0;i<System.Windows.Media.VisualTreeHelper.GetChildrenCount(node);i++){var child=System.Windows.Media.VisualTreeHelper.GetChild(node,i);if(child is T)yield return (T)child;foreach(var sub in Children<T>(child))yield return sub;}}
+ public static void Run(string home,Action<bool,string> check){
+  var owner=new CompactCounter.SurfaceWindow(300,200);owner.Show();
+  var card=new CompactCounter.LiteWindow(new CompactCounter.Engine(Path.Combine(home,"ui-logs"),Path.Combine(home,"ui-data","state.json")),true);card.SetPreview("示例聊天",3);card.Show();card.UpdateLayout();
+  check(card.AllowsTransparency&&card.WindowStyle==System.Windows.WindowStyle.None,"card uses alpha-composited vector surface");
+  var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)card.Width,(int)card.Height,96,96,System.Windows.Media.PixelFormats.Pbgra32);bitmap.Render(card.Content as System.Windows.Media.Visual);var pixels=new byte[(int)card.Width*(int)card.Height*4];bitmap.CopyPixels(pixels,(int)card.Width*4,0);int partial=0;for(int y=8;y<25;y++)for(int x=8;x<25;x++){int alpha=pixels[(y*(int)card.Width+x)*4+3];if(alpha>0&&alpha<255)partial++;}
+  check(pixels[3]==0&&partial>0,"rounded corner includes partially transparent edge pixels");
+  CompactCounter.NativeWindow.Attach(card,owner.Handle);check(GetWindow(card.Handle,4)==owner.Handle&&(GetWindowLong(card.Handle,-20)&8)==0,"counter belongs to owner and is never globally topmost");
+  var menu=new CompactCounter.MenuWindow(card,()=>{},()=>{},()=>{},()=>{});menu.Show();menu.UpdateLayout();check(Children<System.Windows.Controls.Button>(menu).Count()==4,"menu exposes all four actions on themed surface");menu.Close();check(menu.IsDisposed,"closing menu does not reenter close on deactivation");
+  var data=new CompactCounter.CounterSnapshot();var names=new System.Collections.Generic.Dictionary<string,string>{{"a","示例聊天"},{"b","第二个聊天"}};data.Counts["a"]=1;data.Counts["b"]=0;data.Complete.Add("a");data.Complete.Add("b");data.Events.Add(new CompactCounter.Entry{Session="a",Kind="compacted",Time="2026-11-16T00:00:00Z"});
+  var history=new CompactCounter.HistoryWindow{Owner=card};history.RefreshData(data,names,"a");history.Show();history.UpdateLayout();var input=Children<System.Windows.Controls.TextBox>(history).First();var lists=Children<System.Windows.Controls.ListBox>(history).ToArray();input.Text="不存在";check(lists[0].Items.Count==0,"history search filters sessions without modifying records");input.Text="";lists[0].SelectedIndex=1;check(lists[1].Items.Count==0,"selecting a zero-event session displays empty history");
+  var export=new CompactCounter.ExportWindow(history,data.Events);export.Show();export.UpdateLayout();check(export.AllowsTransparency&&!export.Topmost&&export.Owner==history,"export panel shares appearance and owner hierarchy");export.Close();var notice=new CompactCounter.NoticeWindow(history,"无法保存","请选择可写入的位置。");notice.Show();notice.UpdateLayout();check(notice.Owner==history&&!notice.Topmost,"nested notice stays in its application window group");notice.Close();history.Close();card.Close();owner.Close();
  }
 }

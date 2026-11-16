@@ -29,7 +29,7 @@ public sealed class Lifecycle : ApplicationContext {
     // Explicitly show the counter after that first call, without taking focus.
     ShowWindowAsync(window.Handle,4);
    }
-   catch(Exception e){decision.UserClosed();MessageBox.Show("计数器无法启动："+e.Message,"压缩计数器");}
+   catch(Exception e){decision.UserClosed();new NoticeWindow(null,"计数器无法启动",e.Message).ShowDialog();}
   }
  }
  protected override void ExitThreadCore(){exiting=true;timer.Stop();timer.Dispose();automaticClose=true;if(window!=null&&!window.IsDisposed)window.Close();base.ExitThreadCore();}
